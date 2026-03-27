@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quay Số May Mắn (00-30)</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        /* Container ép xoay 90 độ */
+        .rotate-container {
+            width: 100vh;  
+            height: 100vw;
+            transform: rotate(90deg); 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle, #2a2a2a 0%, #000000 100%);
+        }
+
+        .header-title {
+            font-size: 6vw; 
+            color: #FFD700;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            margin-bottom: 5vw;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            font-weight: bold;
+        }
+
+        .slot-machine {
+            display: flex;
+            gap: 3vh; /* Tăng khoảng cách do chỉ còn 2 số */
+            padding: 4vw 4vh;
+            background: linear-gradient(145deg, #1a1a1a, #333);
+            border: 4px solid #FFD700;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(255, 215, 0, 0.2);
+        }
+
+        .digit {
+            font-size: 30vw; /* To hơn chút vì có nhiều không gian hơn */
+            font-weight: 900;
+            background: #000;
+            color: #fff;
+            width: 22vh;
+            height: 35vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            border: 2px solid #555;
+            box-shadow: inset 0 5px 15px rgba(255,255,255,0.1);
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .controls {
+            margin-top: 8vw;
+        }
+
+        .btn-spin {
+            font-size: 5vw;
+            padding: 2vw 8vh;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(to right, #FFD700, #FFA500);
+            color: #000;
+            font-weight: 900;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(255, 215, 0, 0.4);
+            transition: all 0.2s ease;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn-spin:active {
+            transform: scale(0.95) translateY(5px);
+            box-shadow: 0 5px 10px rgba(255, 215, 0, 0.4);
+        }
+
+        .btn-spin:disabled {
+            background: linear-gradient(to right, #555, #777);
+            color: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+        
+        .winner-glow {
+            animation: glow 1s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { box-shadow: 0 0 10px #FFD700, inset 0 0 10px rgba(255,215,0,0.2); color: #fff; }
+            to { box-shadow: 0 0 40px #FFD700, inset 0 0 20px rgba(255,215,0,0.5); color: #FFD700; border-color: #FFD700;}
+        }
+    </style>
+</head>
+<body>
+
+    <div class="rotate-container">
+        <div class="header-title">Vòng Quay May Mắn</div>
+
+        <div class="slot-machine">
+            <div class="digit" id="digit1">0</div>
+            <div class="digit" id="digit2">0</div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-spin" id="spinBtn" onclick="startSpin()">BẮT ĐẦU</button>
+        </div>
+    </div>
+
+    <script>
+        let isSpinning = false;
+        let wakeLock = null;
+
+        // Tính năng giữ sáng màn hình
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Màn hình đã được giữ sáng liên tục.');
+                }
+            } catch (err) {
+                console.error(`Lỗi Wake Lock: ${err.name}, ${err.message}`);
+            }
+        }
+
+        // Đảm bảo màn hình vẫn sáng nếu người dùng chuyển tab và quay lại
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                requestWakeLock();
+            }
+        });
+
+        function startSpin() {
+            if (isSpinning) return;
+            isSpinning = true;
+
+            // Kích hoạt giữ sáng màn hình ngay khi bấm nút lần đầu (yêu cầu của trình duyệt)
+            if (!wakeLock) {
+                requestWakeLock();
+            }
+
+            const btn = document.getElementById('spinBtn');
+            const digits = [
+                document.getElementById('digit1'),
+                document.getElementById('digit2')
+            ];
+
+            btn.disabled = true;
+            btn.innerText = "ĐANG QUAY...";
+            digits.forEach(d => d.classList.remove('winner-glow'));
+
+            const duration = 3000; 
+            const speed = 40; 
+
+            // Chạy số ngẫu nhiên liên tục (chỉ chạy 2 số)
+            const spinInterval = setInterval(() => {
+                digits[0].innerText = Math.floor(Math.random() * 10);
+                digits[1].innerText = Math.floor(Math.random() * 10);
+            }, speed);
+
+            setTimeout(() => {
+                clearInterval(spinInterval);
+
+                // Tạo số ngẫu nhiên từ 0 đến 30
+                const finalNumber = Math.floor(Math.random() * 31);
+                // Định dạng luôn có 2 chữ số (VD: 5 -> 05)
+                const formattedNumber = finalNumber.toString().padStart(2, '0');
+
+                digits[0].innerText = formattedNumber[0];
+                digits[1].innerText = formattedNumber[1];
+
+                digits.forEach(d => d.classList.add('winner-glow'));
+                fireConfetti();
+
+                isSpinning = false;
+                btn.disabled = false;
+                btn.innerText = "QUAY TIẾP";
+            }, duration);
+        }
+
+        function fireConfetti() {
+            var duration = 3 * 1000;
+            var animationEnd = Date.now() + duration;
+            var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+            function randomInRange(min, max) {
+                return Math.random() * (max - min) + min;
+            }
+
+            var interval = setInterval(function() {
+                var timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                    return clearInterval(interval);
+                }
+
+                var particleCount = 50 * (timeLeft / duration);
+                
+                confetti(Object.assign({}, defaults, { 
+                    particleCount, 
+                    origin: { x: Math.random() - 0.2, y: randomInRange(0.1, 0.3) } 
+                }));
+                confetti(Object.assign({}, defaults, { 
+                    particleCount, 
+                    origin: { x: Math.random() - 0.2, y: randomInRange(0.7, 0.9) } 
+                }));
+            }, 250);
+        }
+    </script>
+</body>
+</html>
